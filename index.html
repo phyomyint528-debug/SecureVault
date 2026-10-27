@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="my">
+<head>
+  <link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#08111f">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#08111f">
+<title>SecureVault</title>
+
+<style>
+*{box-sizing:border-box}
+body{
+  margin:0;background:#08111f;color:#edf4ff;
+  font-family:Arial,sans-serif;padding:20px;
+}
+header{padding:12px 0 22px}
+h1{font-size:26px;color:#65b8ff;margin:0 0 8px}
+p{color:#aabbd0;line-height:1.6}
+.card{
+  background:#111e30;border:1px solid #263c57;
+  border-radius:16px;padding:18px;margin:14px 0;
+}
+.status{font-size:14px;color:#75e0b0}
+h2{font-size:17px;margin-top:0}
+button{
+  width:100%;padding:13px;margin-top:10px;
+  border:0;border-radius:10px;background:#1675db;
+  color:white;font-size:15px;font-weight:bold;
+}
+input,textarea{
+  width:100%;padding:12px;margin-top:10px;
+  border:1px solid #354963;border-radius:9px;
+  background:#091525;color:white;font-size:15px;
+}
+textarea{min-height:85px;resize:vertical}
+.small{font-size:12px;color:#91a5bd}
+#result{overflow-wrap:anywhere;white-space:pre-wrap}
+</style>
+</head>
+
+<body>
+<header>
+  <h1>🔐 SecureVault</h1>
+  <p>Personal Security Platform</p>
+  <div class="status" id="connection">စစ်ဆေးနေသည်...</div>
+</header>
+
+<section class="card">
+  <h2>🛡️ လုံခြုံရေးအခြေအနေ</h2>
+  <p id="security">အခြေခံစနစ် အသင့်ဖြစ်နေသည်။</p>
+  <p class="small">
+    ဤအခြေအနေသည် Prototype ၏ အခြေအနေကိုသာ ဖော်ပြသည်။
+    ဖုန်းတစ်လုံးလုံး လုံခြုံနေကြောင်း အာမမခံပါ။
+  </p>
+</section>
+
+<section class="card">
+  <h2>🔒 ကိုယ်ပိုင် Vault</h2>
+  <p>စမ်းသပ်ရန် စာသားကို စာဝှက်ပြီး သိမ်းဆည်းပါ။</p>
+  <input id="pin" type="password"
+    placeholder="Vault စကားဝှက် (အနည်းဆုံး ၈ လုံး)"
+    autocomplete="new-password">
+  <textarea id="secret"
+    placeholder="စမ်းသပ်ရန် စာသားသာ ထည့်ပါ"></textarea>
+  <button id="save">စာဝှက်ပြီး သိမ်းမည်</button>
+  <button id="load">ပြန်ဖတ်မည်</button>
+  <button id="clear">စမ်းသပ်ဒေတာ ဖျက်မည်</button>
+  <p id="result" role="status"></p>
+  <p class="small">
+    စမ်းသပ်မှုအတွက်သာ သုံးပါ။ အရေးကြီးသော Password
+    သို့မဟုတ် ကိုယ်ရေးအချက်အလက်အစစ် မထည့်ပါနှင့်။
+  </p>
+</section>
+
+<section class="card">
+  <h2>🛰️ ချိတ်ဆက်မှု</h2>
+  <p id="network">Network အခြေအနေကို စစ်ဆေးနေသည်။</p>
+  <p class="small">
+    ဤ Prototype သည် ဂြိုဟ်တုကို တိုက်ရိုက်ချိတ်ဆက်ခြင်း
+    မလုပ်နိုင်သေးပါ။
+  </p>
+</section>
+
+<script>
+const $ = id => document.getElementById(id);
+
+function updateConnection(){
+  $("connection").textContent = navigator.onLine
+    ? "● အင်တာနက်ချိတ်ဆက်ထားသည်"
+    : "● Offline — အင်တာနက်မရှိပါ";
+
+  $("network").textContent = navigator.onLine
+    ? "ပုံမှန် Network ချိတ်ဆက်မှု ရှိနေသည်။"
+    : "Offline အခြေအနေ။ ဂြိုဟ်တုချိတ်ဆက်မှု ရှိသည်ဟု မဆိုလိုပါ။";
+}
+
+window.addEventListener("online", updateConnection);
+window.addEventListener("offline", updateConnection);
+updateConnection();
+
+async function deriveKey(password, salt){
+  const enc = new TextEncoder();
+  const material = await crypto.subtle.importKey(
+    "raw", enc.encode(password), "PBKDF2", false, ["deriveKey"]
+  );
+
+  return crypto.subtle.deriveKey({
+    name:"PBKDF2",
+    salt:salt,
+    iterations:310000,
+    hash:"SHA-256"
+  }, material, {
+    name:"AES-GCM",
+    length:256
+  }, false, ["encrypt","decrypt"]);
+}
+
+function randomBytes(length){
+  return crypto.getRandomValues(new Uint8Array(length));
+}
+
+$("save").addEventListener("click", async ()=>{
+  try{
+    const password = $("pin").value;
+    const secret = $("secret").value;
+
+    if(password.length < 8){
+      $("result").textContent =
+        "စကားဝှက်ကို အနည်းဆုံး ၈ လုံး ထည့်ပါ။";
+      return;
+    }
+
+    if(!secret){
+      $("result").textContent = "စမ်းသပ်ရန် စာသား ထည့်ပါ။";
+      return;
+    }
+
+    if(!crypto.subtle){
+      $("result").textContent =
+        "ဤ Preview ပတ်ဝန်းကျင်တွင် Web Crypto မရနိုင်ပါ။";
+      return;
+    }
+
+    const salt = randomBytes(16);
+    const iv = randomBytes(12);
+    const key = await deriveKey(password, salt);
+
+    const encrypted = await crypto.subtle.encrypt(
+      {name:"AES-GCM", iv},
+      key,
+      new TextEncoder().encode(secret)
+    );
+
+    const record = {
+      version:1,
+      salt:Array.from(salt),
+      iv:Array.from(iv),
+      data:Array.from(new Uint8Array(encrypted))
+    };
+
+    localStorage.setItem("securevault-demo", JSON.stringify(record));
+
+    $("result").textContent =
+      "စာဝှက်ပြီး သိမ်းဆည်းမှု အောင်မြင်သည်။";
+    $("security").textContent =
+      "စမ်းသပ်ဒေတာကို AES-GCM ဖြင့် စာဝှက်သိမ်းဆည်းထားသည်။";
+    $("secret").value = "";
+  }catch(error){
+    $("result").textContent =
+      "မအောင်မြင်ပါ။ Preview နှင့် Browser ခွင့်ပြုချက်ကို စစ်ပါ။";
+  }
+});
+
+$("load").addEventListener("click", async ()=>{
+  try{
+    const password = $("pin").value;
+    const raw = localStorage.getItem("securevault-demo");
+
+    if(!raw){
+      $("result").textContent = "သိမ်းထားသော စမ်းသပ်ဒေတာ မရှိပါ။";
+      return;
+    }
+
+    if(password.length < 8){
+      $("result").textContent = "မှန်ကန်သော စကားဝှက် ထည့်ပါ။";
+      return;
+    }
+
+    const record = JSON.parse(raw);
+    const salt = new Uint8Array(record.salt);
+    const iv = new Uint8Array(record.iv);
+    const data = new Uint8Array(record.data);
+    const key = await deriveKey(password, salt);
+
+    const decrypted = await crypto.subtle.decrypt(
+      {name:"AES-GCM", iv},
+      key,
+      data
+    );
+
+    $("result").textContent =
+      "ပြန်ဖတ်ပြီးသော စာသား:\n" +
+      new TextDecoder().decode(decrypted);
+  }catch(error){
+    $("result").textContent =
+      "ပြန်ဖတ်မရပါ။ စကားဝှက်မှားခြင်း သို့မဟုတ် ဒေတာပျက်စီးခြင်း ဖြစ်နိုင်သည်။";
+  }
+});
+
+$("clear").addEventListener("click", ()=>{
+  if(confirm("စမ်းသပ်ဒေတာကို ဖျက်မှာ သေချာပါသလား။")){
+    localStorage.removeItem("securevault-demo");
+    $("result").textContent = "စမ်းသပ်ဒေတာ ဖျက်ပြီးပါပြီ။";
+    $("security").textContent = "စမ်းသပ်ဒေတာ မရှိတော့ပါ။";
+  }
+});
+</script>
+  <script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker
+      .register("./service-worker.js")
+      .then(() => console.log("SecureVault offline support enabled"))
+      .catch((error) => console.error("Service Worker error:", error));
+  });
+}
+  </script>
+  <script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker
+      .register("./service-worker.js")
+      .then(() => console.log("SecureVault offline support enabled"))
+      .catch((error) => console.error("Service Worker error:", error));
+  });
+}
+  </script>
+</body>
+</html>
